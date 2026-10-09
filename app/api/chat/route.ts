@@ -39,28 +39,44 @@ export async function POST(req: Request) {
     });
   }
 
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${key}`,
-      "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
-      "X-Title": "Ace_X AI",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 1024,
-      messages: [{ role: "system", content: SYSTEM }, ...messages],
-    }),
-  });
-  if (!res.ok) {
+  let res: Response;
+  try {
+    res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key.trim()}`,
+        "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+        "X-Title": "Ace_X AI",
+      },
+      body: JSON.stringify({
+        model: model.trim(),
+        max_tokens: 3000,
+        messages: [{ role: "system", content: SYSTEM }, ...messages],
+      }),
+    });
+  } catch {
     return NextResponse.json(
-      { error: "The AI service returned an error. Try again." },
+      { error: "Could not reach the AI service. Try again." },
+      { status: 502 }
+    );
+  }
+
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const err = await res.json();
+      detail = err?.error?.message ?? "";
+    } catch {}
+    return NextResponse.json(
+      { error: `The AI service returned an error (${res.status}). ${detail}`.trim() },
       { status: 502 }
     );
   }
 
   const data = await res.json();
   const reply: string = data.choices?.[0]?.message?.content ?? "";
-  return NextResponse.json({ reply: reply || "No reply from the AI. Try again." });
-         }
+  return NextResponse.json({
+    reply: reply || "No reply from the AI. Try again or choose another model.",
+  });
+}
