@@ -277,3 +277,37 @@ label.f{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--mu
   .m{max-width:92%}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* rich answers */
+.m{font-family:var(--ans-font);line-height:1.6}
+.m.md{white-space:normal}
+.md>*:first-child{margin-top:0}.md>*:last-child{margin-bottom:0}
+.md p{margin:0 0 .75em}
+.md h1,.md h2,.md h3,.md h4{margin:1em 0 .4em;line-height:1.3}
+.md h1{font-size:1.3em}.md h2{font-size:1.2em}.md h3{font-size:1.1em}.md h4{font-size:1em}
+.md ul,.md ol{margin:0 0 .75em;padding-left:1.4em}.md li{margin:.25em 0}
+.md strong{font-weight:700}
+.md blockquote{margin:0 0 .75em;padding:.2em 0 .2em 12px;border-left:3px solid var(--accent);color:var(--muted)}
+.md code{font-family:var(--mono);font-size:.9em;background:rgba(127,127,127,.18);padding:.1em .35em;border-radius:6px}
+.md pre{margin:0 0 .75em;padding:12px;border-radius:10px;overflow-x:auto;background:var(--term);color:var(--term-text);border:1px solid var(--line)}
+.md pre code{background:none;padding:0;color:inherit;font-size:.88em}
+.md table{border-collapse:collapse;display:block;overflow-x:auto;margin:0 0 .75em}
+.md th,.md td{border:1px solid var(--line);padding:6px 10px}
+.md .katex{font-size:1.1em}
+.md .katex-display{margin:.7em 0;overflow-x:auto;overflow-y:hidden;padding:2px 0}
+.diagram{margin:.5em 0 .75em}
+.diagram svg{max-width:100%;height:auto;background:#fff;border-radius:12px;padding:6px}
+.out.md{font-family:var(--ans-font);color:var(--text);background:var(--panel2);font-size:var(--ans-size)}
+.math .katex-display{margin:.3em 0}
+
+/* quizzes, formulas */
+.qtext{font-size:1.1em;font-weight:600;line-height:1.5;margin-bottom:6px;font-family:var(--ans-font)}
+.qtext p,.q-opt p{margin:0}
+.q-opt{font-family:var(--ans-font);font-size:var(--ans-size)}
+.q-opt b{color:var(--accent);margin-right:4px}
+.why{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);font-size:.95em;text-align:left;font-family:var(--ans-font)}
+.why p{margin:0 0 .5em}
+.rev{margin-top:16px;text-align:left;width:100%}
+button.formula{display:block;width:100%;text-align:left;cursor:pointer}
+button.formula:hover{border-color:var(--accent)}
+#fOut{font-family:var(--ans-font);font-size:var(--ans-size);line-height:1.6}
