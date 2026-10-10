@@ -31,6 +31,11 @@ git push -u origin main
 - `public/app.js` the front-end behaviour (login, chat, quizzes, planner, settings, Pro)
 - `public/logo*.{png,webp}` your logo files
 
+## Payments (Paystack) and admin
+1. Add these in Vercel: `PAYSTACK_SECRET_KEY` (start with your TEST secret key), `PRO_TOKEN_SECRET` (a long random phrase, 32+ characters) and `ADMIN_CODE`.
+2. Pro status is a signed token that the server checks on every Pro feature (Exam Practice, Formula Hub, Image Studio, Double-check). It is stored per device until real accounts exist.
+3. To go live, swap the Paystack TEST secret key for the LIVE one and redeploy.
+
 ## Still demo-only (backend work, in this order)
 1. Real accounts (login, sign-up, saved chats) instead of browser storage
 2. Pro plans and payments checked on the server (prices: GH2 1 week, GH4 2 weeks, GH6 3 weeks, GH8 1 month, GH40 5 months, GH100 1 year)
