@@ -16,7 +16,7 @@ const P={
  lock:"M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4",mic:"M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3",
  img:"M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M9 9h.01",trash:"M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13",bookmark:"M6 3h12v18l-6-4-6 4z",copy:"M9 9h11v11H9zM5 15V4h11",
  history:"M4 12a8 8 0 1 0 3-6M4 4v4h4M12 8v5l3 2",star:"M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z",
- formula:"M18 4H6l7 8-7 8h12",exam:"M6 3h12v18H6zM9 8h6M9 12h6M9 16h4",logout:"M10 4H5v16h5M15 8l4 4-4 4M19 12H9",play:"M7 4l13 8-13 8z"};
+ formula:"M18 4H6l7 8-7 8h12",exam:"M6 3h12v18H6zM9 8h6M9 12h6M9 16h4",logout:"M10 4H5v16h5M15 8l4 4-4 4M19 12H9",play:"M7 4l13 8-13 8z",info:"M12 8h.01M11 12h1v5h1M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z"};
 function icons(s){(s||document).querySelectorAll('[data-ic]').forEach(e=>{if(!e.firstChild)e.innerHTML='<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="'+P[e.dataset.ic]+'"/></svg>'})}
 const LOGO='<span class="lg-mark" role="img" aria-label="Ace_X AI logo"></span>';
 document.querySelectorAll('[data-logo]').forEach(e=>e.outerHTML=LOGO);
@@ -38,6 +38,18 @@ const hasPro=()=>!!adminTok||!!(me()&&me().proToken&&me().proUntil>Date.now());
 const proTok=()=>adminTok||((me()&&me().proToken&&me().proUntil>Date.now())?me().proToken:'');
 const AH=()=>({'Content-Type':'application/json','x-pro-token':proTok()});
 const first=n=>{n=(n||'Student').trim().split(/\s+/)[0];return n.charAt(0).toUpperCase()+n.slice(1).toLowerCase()};
+/* Daily quiz allowance. Free users get a flat amount; each Pro plan adds a bonus on top, bigger for longer plans.
+   Tune the numbers here any time — nothing else needs to change. */
+const FREE_DAILY_QUIZZES=15;
+const PLAN_BONUS={w1:10,w2:20,w3:30,m1:40,m5:50,y1:60};
+function dailyQuizLimit(){
+ if(adminOn)return Infinity;
+ const u=me();if(!u)return FREE_DAILY_QUIZZES;
+ if(hasPro()&&u.planId&&PLAN_BONUS[u.planId]!=null)return FREE_DAILY_QUIZZES+PLAN_BONUS[u.planId];
+ return FREE_DAILY_QUIZZES;
+}
+function quizzesUsedToday(){rollDay();return stats.today.quizzes||0}
+function quizzesLeftToday(){const left=dailyQuizLimit()-quizzesUsedToday();return left===Infinity?Infinity:Math.max(0,left)}
 function persist(){ls.set('acex-accounts',accounts);ls.set('acex-chats',chats);ls.set('acex-saved',saved);ls.set('acex-plan',planData);ls.set('acex-quizzes',quizHist);ls.set('acex-acts',acts);ls.set('acex-stats',stats);ls.set('acex-prefs',prefs)}
 function log(t){acts.unshift({t,at:Date.now()});acts=acts.slice(0,20);persist()}
 function rollDay(){const t=dstr(new Date());if(stats.today.d!==t){stats.today={d:t,chats:0,quizzes:0,qs:0};
@@ -103,7 +115,7 @@ async function handlePayReturn(){
  if(!ref||!me())return;ls.set('acex-pendingref',null);toast('Confirming your payment...');
  try{const r=await fetch('/api/pay/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reference:ref})});const d=await r.json();
   if(!r.ok)throw new Error(d.error||'Payment was not confirmed');
-  const u=me();u.proToken=d.token;u.proUntil=d.until;persist();refreshUser();go('pro');toast('Pro is active until '+new Date(d.until).toLocaleDateString())}
+  const u=me();u.proToken=d.token;u.proUntil=d.until;u.planId=d.planId||b.dataset.plan;persist();refreshUser();go('pro');toast('Pro is active until '+new Date(d.until).toLocaleDateString())}
  catch(e){toast(e.message||'Payment was not confirmed')}}
 
 /* admin: the code is checked on the server */
@@ -129,7 +141,7 @@ function go(k){
  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+k));
  nav.querySelectorAll('a').forEach(a=>a.classList.toggle('on',a.dataset.nav===k));
  closeSide();window.scrollTo(0,0);document.body.classList.toggle('nowm',k==='terminal');
- if(k==='home')renderHome();if(k==='history')renderHistory();if(k==='saved')renderSaved();if(k==='quizzes')renderQuizHist();
+ if(k==='home')renderHome();if(k==='history')renderHistory();if(k==='saved')renderSaved();if(k==='quizzes'){renderQuizHist();renderQuota()}
  if(k==='planner')renderCal();if(k==='formulas')renderFormulas();if(k==='progress')renderProgress();if(k==='settings')showAdmin();
  if(k==='chat')setTimeout(()=>cin.focus(),60);
 }
@@ -178,8 +190,8 @@ async function doubleCheck(text){
  if(!hasPro()){toast('Double-check is a Pro feature');go('pro');return}
  let q='';if(curChat){const k=curChat.m.findIndex(m=>m.r==='ai'&&m.t===text);for(let i=(k<0?curChat.m.length:k)-1;i>=0;i--){if(curChat.m[i].r==='me'){q=curChat.m[i].t;break}}}
  const box=bubble('ai','Double-checking...');
- try{const r=await fetch('/api/chat',{method:'POST',headers:AH(),body:JSON.stringify({mode:'verify',messages:[{role:'user',content:'Question:\n'+q+'\n\nAnswer to check:\n'+text}]})});const x=await r.json();renderAnswer(box,x.reply||x.error||'No reply.')}
- catch(e){box.textContent='Could not reach the server. Try again.'}
+ try{const x=await apiPost('/api/chat',AH(),{mode:'verify',messages:[{role:'user',content:'Question:\n'+q+'\n\nAnswer to check:\n'+text}]},55000);renderAnswer(box,x.reply)}
+ catch(e){box.textContent=e.message||'Could not reach the server. Try again.'}
  msgs.scrollTop=msgs.scrollHeight}
 function renderFiles(){filesEl.innerHTML='';pending.forEach((f,i)=>{const t=document.createElement('div');t.className='thumb';
  if(f.type.startsWith('image/')){const im=document.createElement('img');im.src=f.url;im.alt=f.name;t.appendChild(im)}else t.textContent=f.name;
@@ -202,9 +214,9 @@ function sendMsg(){
  pending=[];renderFiles();cin.value='';cin.style.height='44px';
  const ai=bubble('ai','Thinking...');
  const history=curChat.m.map(m=>({role:m.r==='me'?'user':'assistant',content:m.t||'(attachment)'}));
- fetch('/api/chat',{method:'POST',headers:AH(),body:JSON.stringify({messages:history})})
-  .then(r=>r.json()).then(d=>{const r=d.reply||d.error||'No reply.';renderAnswer(ai,r);addActions(ai,r);curChat.m.push({r:'ai',t:r});persist();msgs.scrollTop=msgs.scrollHeight})
-  .catch(()=>{ai.textContent='Could not reach the server. Check your connection and try again.'});
+ apiPost('/api/chat',AH(),{messages:history},55000)
+  .then(d=>{const r=d.reply;renderAnswer(ai,r);addActions(ai,r);curChat.m.push({r:'ai',t:r});persist();msgs.scrollTop=msgs.scrollHeight})
+  .catch(e=>{ai.textContent=e.message||'Could not reach the server. Check your connection and try again.'});
  persist();
 }
 function openChat(c){curChat=c;msgs.innerHTML='';c.m.forEach(m=>{const d=bubble(m.r,m.t,(m.f||[]).map(n=>({name:n,type:''})));if(m.r==='ai'){renderAnswer(d,m.t);addActions(d,m.t)}});go('chat')}
@@ -237,8 +249,8 @@ function renderQuizHist(){$('qzHist').innerHTML=quizHist.length?quizHist.map(q=>
 async function startQuiz(o){
  const btn=o.exam?$('exGo'):$('qzGo');const old=btn.innerHTML;btn.disabled=true;btn.textContent='Building your quiz...';
  try{
-  const r=await fetch('/api/quiz',{method:'POST',headers:AH(),body:JSON.stringify({topic:o.topic,level:o.level,n:o.n,exam:o.exam||'',subject:o.subject||''})});
-  const d=await r.json();if(!r.ok||!d.questions)throw new Error(d.error||'Could not build the quiz. Try again.');
+  const d=await apiPost('/api/quiz',AH(),{topic:o.topic,level:o.level,n:o.n,exam:o.exam||'',subject:o.subject||''},55000);
+  if(!d.questions)throw new Error('Could not build the quiz. Try again.');
   qz={topic:d.title,level:d.level,qs:d.questions,i:0,score:0,secs:o.secs,t:0,tm:null,done:false,picks:[],exam:!!o.exam};
   go('quizzes');$('quizSetup').hidden=true;$('quizRun').hidden=false;showQ();
  }catch(e){toast(e.message||'Could not build the quiz')}
@@ -250,7 +262,7 @@ function showQ(){
  $('qText').innerHTML=mdToHtml(q.q);
  q.options.forEach((o,i)=>{const b=document.createElement('button');b.className='q-opt';b.innerHTML='<b>'+'ABCD'[i]+'.</b> '+inl(mdToHtml(o));b.onclick=()=>pick(i);$('qOpts').appendChild(b)});
  $('qQuit').onclick=endQuiz;$('qNext').onclick=()=>{qz.i++;qz.i<qz.qs.length?showQ():finishQuiz()};
- if(qz.secs){qz.t=qz.secs;const tick=()=>{$('qTimer').textContent='Time left: '+qz.t+'s';if(qz.t<=0){clearInterval(qz.tm);pick(-1)}qz.t--};tick();qz.tm=setInterval(tick,1000)}
+ if(qz.secs){qz.t=qz.secs;const tick=()=>{if(qz.t<=0){clearInterval(qz.tm);$('qTimer').textContent="Time's up!";$('qTimer').style.color='#e5484d';pick(-1);return}$('qTimer').textContent='Time left: '+qz.t+'s';qz.t--};tick();qz.tm=setInterval(tick,1000)}
 }
 function pick(i){if(qz.done)return;qz.done=true;clearInterval(qz.tm);const q=qz.qs[qz.i];qz.picks[qz.i]=i;if(i===q.answer)qz.score++;
  [...$('qOpts').children].forEach((b,j)=>{b.disabled=true;if(j===q.answer)b.classList.add('ok');else if(j===i)b.classList.add('bad')});
@@ -258,7 +270,7 @@ function pick(i){if(qz.done)return;qz.done=true;clearInterval(qz.tm);const q=qz.
  $('qNext').hidden=false;$('qNext').textContent=qz.i+1<qz.qs.length?'Next':'See score'}
 function finishQuiz(){
  const n=qz.qs.length;stats.quizzes++;stats.questions+=n;stats.today.quizzes++;stats.today.qs+=n;
- quizHist.unshift({topic:qz.topic+' ('+qz.level+')',score:qz.score,n,d:new Date().toLocaleDateString()});log('Completed quiz: '+qz.topic+' ('+qz.score+'/'+n+')');persist();
+ quizHist.unshift({topic:qz.topic+' ('+qz.level+')',score:qz.score,n,d:new Date().toLocaleDateString()});log('Completed quiz: '+qz.topic+' ('+qz.score+'/'+n+')');persist();renderQuota();
  const missed=qz.qs.map((q,k)=>({q,k})).filter(x=>qz.picks[x.k]!==x.q.answer);
  let rev='';
  if(missed.length){
@@ -267,8 +279,19 @@ function finishQuiz(){
  $('quizRun').innerHTML='<div class="stackv" style="align-items:center;text-align:center"><div class="muted">Your score</div><div class="scorebig">'+qz.score+' / '+n+'</div><p class="muted">'+(qz.score>=n*.7?'Great work!':'Keep practising. You will get there.')+'</p><button class="btn" id="qDone">Back to quizzes</button></div>'+rev;
  $('qDone').onclick=endQuiz}
 function endQuiz(){if(qz)clearInterval(qz.tm);qz=null;$('quizRun').hidden=true;$('quizSetup').hidden=false;renderQuizHist()}
-$('qzGo').onclick=()=>{const t=$('qzTopic').value.trim();if(!t){toast('Type a topic first');return}startQuiz({topic:t,level:$('qzDiff').value,n:+$('qzN').value,secs:+$('qzSecs').value||0})};
-$('exGo').onclick=()=>startQuiz({topic:$('exTopic').value.trim(),level:$('exLevel').value,n:+$('exN').value,secs:0,exam:$('exExam').value,subject:$('exSub').value});
+$('qzGo').onclick=()=>{
+ const t=$('qzTopic').value.trim();if(!t){toast('Type a topic first');return}
+ if(quizzesLeftToday()<=0){toast('You have used today\'s quizzes. '+(hasPro()?'More unlock tomorrow.':'Upgrade to Pro for more.'));if(!hasPro())go('pro');return}
+ startQuiz({topic:t,level:$('qzDiff').value,n:+$('qzN').value,secs:+$('qzSecs').value||0})};
+$('exGo').onclick=()=>{
+ if(quizzesLeftToday()<=0){toast('You have used today\'s quizzes. '+(hasPro()?'More unlock tomorrow.':'Upgrade to Pro for more.'));if(!hasPro())go('pro');return}
+ startQuiz({topic:$('exTopic').value.trim(),level:$('exLevel').value,n:+$('exN').value,secs:0,exam:$('exExam').value,subject:$('exSub').value})};
+function renderQuota(){
+ const left=quizzesLeftToday(),limit=dailyQuizLimit();
+ const msg=limit===Infinity?'Unlimited quizzes today (admin).':left>0?left+' of '+limit+' quizzes left today.':'You have used all '+limit+' quizzes for today. Come back tomorrow'+(hasPro()?'':', or upgrade to Pro for more.')+'';
+ const q=$('qzQuota');q.innerHTML='<div class="row" style="flex-wrap:nowrap;gap:10px;align-items:center"><i data-ic="quiz" style="color:var(--accent)"></i><div class="grow">'+esc(msg)+'</div>'+(hasPro()?'':'<button class="btn ghost sm" data-go="pro">Upgrade</button>')+'</div>';icons(q);
+ $('exQuota').textContent=limit===Infinity?'Unlimited (admin).':left+' of '+limit+' quizzes left today.';
+}
 
 /* ---------- code lab ---------- */
 let runFrame=null;
@@ -295,8 +318,7 @@ async function explainFormula(q){
  const o=$('fOut');o.hidden=false;o.classList.add('md');o.textContent='Working it out...';o.scrollIntoView({behavior:'smooth',block:'nearest'});
  if(fCache[q.toLowerCase()]){renderAnswer(o,fCache[q.toLowerCase()]);return}
  $('fGo').disabled=true;
- try{const r=await fetch('/api/formula',{method:'POST',headers:AH(),body:JSON.stringify({query:q})});const d=await r.json();
-  if(!r.ok)throw new Error(d.error||'Could not explain it');fCache[q.toLowerCase()]=d.reply;renderAnswer(o,d.reply);log('Formula Hub: '+q.slice(0,40))}
+ try{const d=await apiPost('/api/formula',AH(),{query:q},55000);fCache[q.toLowerCase()]=d.reply;renderAnswer(o,d.reply);log('Formula Hub: '+q.slice(0,40))}
  catch(e){o.textContent=e.message||'Could not reach the server. Try again.'}
  $('fGo').disabled=false}
 $('fSearch').oninput=renderFormulas;
@@ -307,7 +329,7 @@ renderFormulas();
 /* ---------- image studio ---------- */
 $('imGo').onclick=async()=>{const p=$('imPrompt').value.trim();if(!p){toast('Describe your image first');return}
  const o=$('imOut');o.style.display='block';o.classList.remove('md');o.textContent='Drawing...';$('imGo').disabled=true;
- try{const r=await fetch('/api/chat',{method:'POST',headers:AH(),body:JSON.stringify({mode:'diagram',messages:[{role:'user',content:'Draw a clear, colourful, labelled diagram as one SVG for: '+p}]})});const d=await r.json();renderAnswer(o,d.reply||d.error||'No reply.');log('Image Studio: '+p.slice(0,40))}catch(e){o.textContent='Could not reach the server. Try again.'}
+ try{const d=await apiPost('/api/chat',AH(),{mode:'diagram',messages:[{role:'user',content:'Draw a clear, colourful, labelled diagram as one SVG for: '+p}]},55000);renderAnswer(o,d.reply);log('Image Studio: '+p.slice(0,40))}catch(e){o.textContent=e.message||'Could not reach the server. Try again.'}
  $('imGo').disabled=false};
 
 /* ---------- planner ---------- */
@@ -328,42 +350,43 @@ $('calPrev').onclick=()=>{cm--;if(cm<0){cm=11;cy--}renderCal()};$('calNext').onc
 $('plAdd').onclick=()=>{const t=$('plText').value.trim();if(!t){toast('Type a session first');return}(planData[sel]=planData[sel]||[]).push({id:Date.now(),t,s:$('plSub').value,done:false});$('plText').value='';log('Planned: '+t);persist();renderCal()};
 $('plText').addEventListener('keydown',e=>{if(e.key==='Enter')$('plAdd').click()});
 
-/* ---------- terminal tabs ---------- */
-const T=['<span class="p">ace_x@localhost:~$</span> neofetch\n  OS:     Ace_X AI\n  Shell:  zsh\n  Uptime: 2h 34m\n  Memory: 1.2G / 8G\n<span class="p">ace_x@localhost:~$</span> <span class="caret"></span>',
- '<span class="p">ace_x@localhost:~$</span> tools --list\n  nmap        port scanner\n  hashcat     hash recovery\n  wireshark   packet analyzer\n  metasploit  exploit framework\n<span class="p">ace_x@localhost:~$</span> <span class="caret"></span>',
+/* ---------- terminal simulator (offline, no real commands run) ---------- */
+const TABS=['<span class="p">ace_x@localhost:~$</span> neofetch\n  OS:     Ace_X AI (simulator)\n  Shell:  zsh\n  Uptime: 2h 34m\n  Memory: 1.2G / 8G\n<span class="p">ace_x@localhost:~$</span> <span class="caret"></span>',
+ '<span class="p">ace_x@localhost:~$</span> tools --list\n  nmap        port scanner\n  hashcat     hash recovery\n  wireshark   packet analyzer\n  metasploit  exploit framework\nAll output below is sample data for learning. Nothing here is a live scan.\n<span class="p">ace_x@localhost:~$</span> <span class="caret"></span>',
  '<span class="p">ace_x@localhost:~$</span> ls scripts/\n  hello.py   quiz_gen.py   notes_sync.sh\n<span class="p">ace_x@localhost:~$</span> <span class="caret"></span>'];
-$('termBox').innerHTML=T[0];
-document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');$('termBox').innerHTML=T[b.dataset.t]});
+let termTab=0;
+function setTermTab(i){termTab=i;document.querySelectorAll('#tabs button').forEach((x,j)=>x.classList.toggle('on',j===i));$('termBox').innerHTML=TABS[i]}
+document.querySelectorAll('#tabs button').forEach((b,i)=>b.onclick=()=>setTermTab(i));
+setTermTab(0);
 
-/* ---------- rich answers: markdown + maths + SVG diagrams ---------- */
-function texHTML(tex,display){try{return window.katex?katex.renderToString(tex,{displayMode:!!display,throwOnError:false}):esc(tex)}catch(e){return esc(tex)}}
-function mdToHtml(src){
- const code=[],math=[];
- let t=String(src)
-  .replace(/```[\s\S]*?```/g,m=>{code.push(m);return '@@C'+(code.length-1)+'@@'})
-  .replace(/`[^`\n]+`/g,m=>{code.push(m);return '@@C'+(code.length-1)+'@@'});
- const keep=(x,d)=>{math.push(texHTML(x.trim(),d));return '@@M'+(math.length-1)+'@@'};
- t=t.replace(/\$\$([\s\S]+?)\$\$/g,(m,x)=>keep(x,true))
-  .replace(/\\\[([\s\S]+?)\\\]/g,(m,x)=>keep(x,true))
-  .replace(/\\\(([\s\S]+?)\\\)/g,(m,x)=>keep(x,false))
-  .replace(/(^|[^\\$\w])\$([^\s$](?:[^$\n]*?[^\s$\\])?)\$(?![\d$])/g,(m,p,x)=>p+keep(x,false));
- t=t.replace(/@@C(\d+)@@/g,(m,i)=>code[i]);
- let html=(window.marked&&window.DOMPurify)?DOMPurify.sanitize(marked.parse(t,{gfm:true,breaks:true})):esc(t).replace(/\n/g,'<br>');
- return html.replace(/@@M(\d+)@@/g,(m,i)=>math[i]);
+const FS={'notes.txt':'Study notes go here.','todo.md':'- Revise kinetic theory\n- Practice quiz: Hard level\n- Try Formula Hub: sine rule','scripts':null,'projects':null};
+const prompt=()=>'<span class="p">ace_x@localhost:~$</span> ';
+function termPrint(line){const b=$('termBox');const car=b.querySelector('.caret');const row=document.createElement('div');row.textContent=line;if(car)b.insertBefore(row,car);else b.appendChild(row);b.scrollTop=b.scrollHeight}
+function termEcho(cmd){const b=$('termBox');const car=b.querySelector('.caret');const row=document.createElement('div');row.innerHTML=prompt()+esc(cmd);if(car)b.insertBefore(row,car);else b.appendChild(row)}
+const TOOL_OUT={
+ nmap:a=>'Starting simulated Nmap scan on '+(a||'192.168.1.1')+'\nPORT     STATE  SERVICE\n22/tcp   open   ssh\n80/tcp   open   http\n443/tcp  open   https\n(This is sample data. No real scan was sent.)',
+ metasploit:()=>'msf6 > use exploit/sample/demo\n[*] This is a simulated Metasploit console.\n[*] No real exploit or network traffic is used here.\nUse a legal lab such as TryHackMe or HackTheBox to practise for real.',
+ hashcat:a=>'hashcat (simulated) starting...\nSession: demo\nHash.Mode: 0 (MD5)\nTarget: '+(a||'sample.hash')+'\nStatus: Simulated only, no real cracking takes place.',
+ wireshark:()=>'Capturing on "Simulated Interface"\nNo. Time Source Destination Protocol Info\n1   0.000 10.0.0.2 10.0.0.1  TCP      sample packet\n2   0.004 10.0.0.1 10.0.0.2  TCP      sample packet\n(Example packets only. No real traffic is captured here.)'
+};
+function runTermCmd(raw){
+ const cmd=raw.trim();if(!cmd)return;termEcho(cmd);const parts=cmd.split(/\s+/);const name=parts[0].toLowerCase();const arg=parts.slice(1).join(' ');
+ if(name==='help')termPrint('Try: help, ls, cat <file>, whoami, date, clear, neofetch, nmap <target>, hashcat <file>, wireshark, metasploit, tools --list\\nThis terminal is a simulator for learning. It does not run real commands.');
+ else if(name==='ls')termPrint(Object.keys(FS).join('   '));
+ else if(name==='cat'){const f=FS[arg];termPrint(f===null?arg+': is a directory':f!==undefined?f:'cat: '+(arg||'')+': No such file')}
+ else if(name==='whoami')termPrint(((me()&&me().name)||'student').toLowerCase().replace(/\s+/g,'_'));
+ else if(name==='date')termPrint(new Date().toString());
+ else if(name==='pwd')termPrint('/home/'+(((me()&&me().name)||'student').toLowerCase().replace(/\s+/g,'_')));
+ else if(name==='clear'){$('termBox').innerHTML=prompt()+'<span class="caret"></span>';return}
+ else if(['nmap','hashcat','wireshark','metasploit'].includes(name))termPrint(TOOL_OUT[name](arg));
+ else if(name==='tools'&&arg.includes('--list'))termPrint(TABS[1].replace(/<[^>]+>/g,''));
+ else termPrint(name+': command not found. Type help for a list of commands.');
+ const b=$('termBox');const car=b.querySelector('.caret');if(car){const row=document.createElement('div');row.innerHTML=prompt();row.appendChild(car);b.appendChild(row)}b.scrollTop=b.scrollHeight;
 }
-function renderAnswer(el,text){
- el.classList.add('md');el.innerHTML=mdToHtml(text);
- el.querySelectorAll('a').forEach(a=>{a.target='_blank';a.rel='noopener noreferrer'});
- el.querySelectorAll('pre code.language-svg').forEach(c=>{
-  if(!window.DOMPurify)return;
-  const box=document.createElement('div');box.className='diagram';
-  box.innerHTML=DOMPurify.sanitize(c.textContent,{USE_PROFILES:{svg:true,svgFilters:true}});
-  const svg=box.querySelector('svg');if(!svg)return;
-  if(!svg.getAttribute('xmlns'))svg.setAttribute('xmlns','http://www.w3.org/2000/svg');
-  const bar=document.createElement('div');bar.className='acts';bar.innerHTML='<button type="button">Download SVG</button>';
-  bar.firstChild.onclick=()=>{const u=URL.createObjectURL(new Blob([svg.outerHTML],{type:'image/svg+xml'}));const a=document.createElement('a');a.href=u;a.download='diagram.svg';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
-  box.appendChild(bar);c.parentElement.replaceWith(box)});
-}
+function termRun(){const i=$('termIn');runTermCmd(i.value);i.value=''}
+$('termRun').onclick=termRun;
+$('termIn').addEventListener('keydown',e=>{if(e.key==='Enter')termRun()});
+document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>runTermCmd(b.dataset.tool));
 
 /* ---------- boot ---------- */
 applyPrefs();showEmpty();setMode('login');
