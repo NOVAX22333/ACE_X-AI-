@@ -47,5 +47,5 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Server setup is incomplete (PRO_TOKEN_SECRET)." }, { status: 503 });
   }
-  return NextResponse.json({ token, until, plan: plan.label });
+  return NextResponse.json({ token, until, plan: plan.label, planId: String(d.metadata?.plan ?? "") });
 }
