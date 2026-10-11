@@ -21,7 +21,7 @@ export async function callAI(o: Opts): Promise<AIResult> {
     };
   }
 
-  const send = (withReasoning: boolean) =>
+  const send = (withReasoning: boolean, maxTok: number) =>
     fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -32,7 +32,7 @@ export async function callAI(o: Opts): Promise<AIResult> {
       },
       body: JSON.stringify({
         model,
-        max_tokens: o.maxTokens ?? 4000,
+        max_tokens: maxTok,
         temperature: o.temperature,
         messages: [{ role: "system", content: o.system }, ...o.messages],
         ...(withReasoning ? { reasoning: { effort: o.effort } } : {}),
@@ -40,10 +40,14 @@ export async function callAI(o: Opts): Promise<AIResult> {
     });
 
   const useReasoning = !!o.effort && process.env.OPENROUTER_REASONING !== "off";
+  const wanted = o.maxTokens ?? 4000;
   let res: Response;
   try {
-    res = await send(useReasoning);
-    if (!res.ok && useReasoning && res.status === 400) res = await send(false);
+    res = await send(useReasoning, wanted);
+    // Some models reject the reasoning setting or a very large reply size: retry once, plainer.
+    if (!res.ok && res.status === 400 && (useReasoning || wanted > 4000)) {
+      res = await send(false, Math.min(wanted, 4000));
+    }
   } catch {
     return { ok: false, status: 502, error: "Could not reach the AI service. Try again." };
   }
