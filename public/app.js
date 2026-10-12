@@ -1,5 +1,16 @@
 /* ---------- helpers ---------- */
 const $=id=>document.getElementById(id);
+async function apiPost(url,headers,body,timeoutMs){
+ const ctrl=new AbortController();const timer=setTimeout(()=>ctrl.abort(),timeoutMs||55000);
+ let res;
+ try{res=await fetch(url,{method:'POST',headers,body:JSON.stringify(body),signal:ctrl.signal})}
+ catch(e){clearTimeout(timer);if(e.name==='AbortError')throw new Error('This is taking too long. Try a shorter request, or try again.');throw new Error('Could not reach the server. Check your connection and try again.')}
+ clearTimeout(timer);
+ let data=null;try{data=await res.json()}catch(e){}
+ if(!data)throw new Error(res.ok?'The server sent back something unexpected. Try again.':'The server took too long or had an error ('+res.status+'). Try again.');
+ if(!res.ok)throw new Error(data.error||('Error '+res.status+'. Try again.'));
+ return data;
+}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const mem={};
 const ls={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return k in mem?mem[k]:d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){mem[k]=v}}};
